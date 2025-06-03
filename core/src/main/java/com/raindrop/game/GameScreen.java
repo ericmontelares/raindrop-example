@@ -1,175 +1,179 @@
 package com.raindrop.game;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 
-import com.badlogic.gdx.Input.Keys;
-import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.TimeUtils;
-
-import java.util.Iterator;
-
 public class GameScreen implements Screen {
-    final RaindropGame game;
+    final Drop game;
 
-    Texture raindropImage;
-    Texture bucketImage;
-    Sound raindropSound;
-    Music rainMusic;
-
-
-    OrthographicCamera camera;
-    Vector3 touchPos;
-
-
-    Rectangle bucket;
-    Array<Rectangle> raindrops;
-
-
-    long lastDropTime;
+    Texture backgroundTexture;
+    Texture bucketTexture;
+    Texture dropTexture;
+    Sound dropSound;
+    Music music;
+    Sprite bucketSprite;
+    Vector2 touchPos;
+    Array<Sprite> dropSprites;
+    float dropTimer;
+    Rectangle bucketRectangle;
+    Rectangle dropRectangle;
     int dropsGathered;
 
-    public GameScreen(final RaindropGame game) {
+    public GameScreen(final Drop game) {
         this.game = game;
 
-        try {
+        backgroundTexture = new Texture("background.png");
+        bucketTexture = new Texture("bucket.png");
+        dropTexture = new Texture("drop.png");
 
-            raindropImage = new Texture(Gdx.files.internal("raindrop.png"));
-            bucketImage = new Texture(Gdx.files.internal("bucket.png"));
+        dropSound = Gdx.audio.newSound(Gdx.files.internal("drop.mp3"));
+        music = Gdx.audio.newMusic(Gdx.files.internal("music.mp3"));
+        music.setLooping(true);
+        music.setVolume(0.5F);
 
+        bucketSprite = new Sprite(bucketTexture);
+        bucketSprite.setSize(1, 1);
 
-            raindropSound = Gdx.audio.newSound(Gdx.files.internal("drop.mp3"));
-            rainMusic = Gdx.audio.newMusic(Gdx.files.internal("rain.mp3"));
-        } catch (Exception e) {
-            Gdx.app.error("GameScreen", "Error loading assets: " + e);
-        }
+        touchPos = new Vector2();
 
-        rainMusic.setLooping(true);
-        rainMusic.play();
+        bucketRectangle = new Rectangle();
+        dropRectangle = new Rectangle();
 
-        camera = new OrthographicCamera();
-        camera.setToOrtho(false, 800, 400);
-
-        touchPos = new Vector3();
-
-        bucket = new Rectangle();
-        bucket.x = 800 / 2 - 64 / 2;
-        bucket.y = 20;
-        bucket.width = 64;
-        bucket.height = 64;
-
-        raindrops = new Array<Rectangle>();
-        spawnRaindrop();
-    }
-
-    private void spawnRaindrop() {
-        Rectangle raindrop = new Rectangle();
-        raindrop.x = MathUtils.random(0, 800 - 64);
-        raindrop.y = 470;
-        raindrop.width = 20;
-        raindrop.height = 20;
-        raindrops.add(raindrop);
-        lastDropTime = TimeUtils.nanoTime();
-    }
-
-    @Override
-    public void render(float delta) {
-
-        ScreenUtils.clear(0, 0, 0.2f, 1);
-
-        camera.update();
-
-        Gdx.app.log("GameScreen", "Rendering with " + dropsGathered + " drops collected");
-
-        if (game.batch != null && bucketImage != null && raindropImage != null) {
-            game.batch.setProjectionMatrix(camera.combined);
-
-            game.batch.begin();
-
-            game.font.setColor(1, 1, 0, 1);
-
-            game.font.draw(game.batch, "Raindrops Collected: " + dropsGathered, 10, 450);
-            game.font.setColor(1, 1, 1, 1);
-
-
-            game.batch.draw(bucketImage, bucket.x, bucket.y, bucket.width, bucket.height);
-
-            for (Rectangle raindrop : raindrops) {
-                game.batch.draw(raindropImage, raindrop.x, raindrop.y, raindrop.width, raindrop.height);
-            }
-
-            game.batch.end();
-        }
-
-        if (Gdx.input.isTouched()) {
-            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(touchPos);
-            bucket.x = touchPos.x - 64 / 2;
-        }
-        if (Gdx.input.isKeyPressed(Keys.LEFT)) bucket.x -= 200 * Gdx.graphics.getDeltaTime();
-        if (Gdx.input.isKeyPressed(Keys.RIGHT)) bucket.x += 200 * Gdx.graphics.getDeltaTime();
-
-        if (bucket.x < 0) bucket.x = 0;
-        if (bucket.x > 800 - 64) bucket.x = 800 - 64;
-
-        if (TimeUtils.nanoTime() - lastDropTime > 1000000000) {
-            spawnRaindrop();
-        }
-
-        Iterator<Rectangle> iter = raindrops.iterator();
-        while (iter.hasNext()) {
-            Rectangle raindrop = iter.next();
-            raindrop.y -= 100 * Gdx.graphics.getDeltaTime();
-
-            if (raindrop.y + 64 < 0) iter.remove();
-
-            if (raindrop.overlaps(bucket)) {
-                dropsGathered++;
-                raindropSound.play();
-                iter.remove();
-            }
-        }
-    }
-
-    @Override
-    public void resize(int width, int height) {
-
+        dropSprites = new Array<>();
     }
 
     @Override
     public void show() {
-        rainMusic.play();
+        music.play();
+    }
+
+    @Override
+    public void render(float delta) {
+        input();
+        logic();
+        draw();
+    }
+
+    private void input() {
+        float speed = 4f;
+        float delta = Gdx.graphics.getDeltaTime();
+
+        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) {
+            bucketSprite.translateX(speed * delta);
+        }
+        else if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
+            bucketSprite.translateX(-speed * delta);
+        }
+
+        if (Gdx.input.isTouched()) {
+            touchPos.set(Gdx.input.getX(), Gdx.input.getY());
+            game.viewport.unproject(touchPos);
+            bucketSprite.setCenterX(touchPos.x);
+        }
+    }
+
+    private void logic() {
+        float worldWidth = game.viewport.getWorldWidth();
+        float worldHeight = game.viewport.getWorldHeight();
+        float bucketWidth = bucketSprite.getWidth();
+        float bucketHeight = bucketSprite.getHeight();
+        float delta = Gdx.graphics.getDeltaTime();
+
+        bucketSprite.setX(MathUtils.clamp(bucketSprite.getX(), 0, worldWidth - bucketWidth));
+        bucketRectangle.set(bucketSprite.getX(), bucketSprite.getY(), bucketWidth, bucketHeight);
+
+        for (int i = dropSprites.size - 1; i >= 0; i--) {
+            Sprite dropSprite = dropSprites.get(i);
+            float dropWidth = dropSprite.getWidth();
+            float dropHeight = dropSprite.getHeight();
+
+            dropSprite.translateY(-2f * delta);
+            dropRectangle.set(dropSprite.getX(), dropSprite.getY(), dropWidth, dropHeight);
+
+            if (dropSprite.getY() < -dropHeight) dropSprites.removeIndex(i);
+            else if (bucketRectangle.overlaps(dropRectangle)) {
+                dropsGathered++;
+                dropSprites.removeIndex(i);
+                dropSound.play();
+            }
+        }
+
+        dropTimer += delta;
+        if (dropTimer > 1f) {
+            dropTimer = 0;
+            createDroplet();
+        }
+    }
+
+    private void draw() {
+        ScreenUtils.clear(Color.BLACK);
+        game.viewport.apply();
+        game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+        game.batch.begin();
+
+        float worldWidth = game.viewport.getWorldWidth();
+        float worldHeight = game.viewport.getWorldHeight();
+
+        game.batch.draw(backgroundTexture, 0, 0, worldWidth, worldHeight);
+        bucketSprite.draw(game.batch);
+
+        game.font.draw(game.batch, "Drops collected: " + dropsGathered, 0, worldHeight);
+
+        for (Sprite dropSprite : dropSprites) {
+            dropSprite.draw(game.batch);
+        }
+
+        game.batch.end();
+    }
+
+    private void createDroplet() {
+        float dropWidth = 1;
+        float dropHeight = 1;
+        float worldWidth = game.viewport.getWorldWidth();
+        float worldHeight = game.viewport.getWorldHeight();
+
+        Sprite dropSprite = new Sprite(dropTexture);
+        dropSprite.setSize(dropWidth, dropHeight);
+        dropSprite.setX(MathUtils.random(0F, worldWidth - dropWidth));
+        dropSprite.setY(worldHeight);
+        dropSprites.add(dropSprite);
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        game.viewport.update(width, height, true);
     }
 
     @Override
     public void hide() {
-
     }
 
     @Override
     public void pause() {
-
     }
 
     @Override
     public void resume() {
-
     }
 
     @Override
     public void dispose() {
-        raindropImage.dispose();
-        bucketImage.dispose();
-        raindropSound.dispose();
-        rainMusic.dispose();
+        backgroundTexture.dispose();
+        dropSound.dispose();
+        music.dispose();
+        dropTexture.dispose();
+        bucketTexture.dispose();
     }
 }
 
